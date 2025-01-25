@@ -62,7 +62,7 @@ def send_email_in_background(image_path):
     email_thread.start()
 
 def main():
-    model = YOLO("ppe.pt")  # Replace with your custom model file if needed
+    model = YOLO("Model/ppe.pt")  # Replace with your custom model file if needed
     cap = cv2.VideoCapture(0)  # 0 is usually the default camera
     
     if not cap.isOpened():
@@ -134,7 +134,7 @@ def main():
                         person_detected = True
 
         # If person is detected but no hardhat detected for 10 seconds, send an email alert
-        if person_detected and not hardhat_detected and (time.time() - last_email_time) >= 10:  # Check 10 seconds interval
+        if person_detected and not hardhat_detected and (time.time() - last_email_time) >= 100:  # Check 10 seconds interval
             image_path = "no_hardhat_frame.jpg"
             cv2.imwrite(image_path, frame)  # Save the frame as an image
             send_email_in_background(image_path)  # Send email in background thread
