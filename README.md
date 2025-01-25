@@ -4,12 +4,6 @@
 
 This project focuses on enhancing construction site safety through real-time detection of safety gear such as helmets, vests, and masks worn by workers, as well as detecting the presence of a person. The detection is performed using YOLOv8, a state-of-the-art object detection algorithm.
 
-<div style="display: flex;">
-  <img src="Visuals/safetynow.gif" alt="Alt text" width="500"/>
-  <img src="Visuals/safetynow.gif" alt="Alt text" width="500"/>
-    
-</div>
-
 
 ## Overview
 
