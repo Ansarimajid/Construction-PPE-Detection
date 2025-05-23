@@ -12,6 +12,7 @@ import threading
 
 # Load environment variables from .env file
 load_dotenv()
+# Above Is Environment Variables
 
 # Retrieve the email and password from environment variables
 sender_email = os.getenv("SENDER_EMAIL")
