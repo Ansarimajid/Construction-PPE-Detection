@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import cv2
 import time
 import smtplib
+import yaml
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -18,6 +19,11 @@ load_dotenv()
 sender_email = os.getenv("SENDER_EMAIL")
 receiver_email = os.getenv("RECEIVER_EMAIL")
 email_password = os.getenv("EMAIL_PASSWORD")
+
+
+def load_config(config_path="config.yaml"):
+    with open(config_path, "r", encoding="utf-8") as config_file:
+        return yaml.safe_load(config_file)
 
 def draw_text_with_background(frame, text, position, font_scale=0.4, color=(255, 255, 255), thickness=1, bg_color=(0, 0, 0), alpha=0.7, padding=5):
     font = cv2.FONT_HERSHEY_SIMPLEX
@@ -63,8 +69,10 @@ def send_email_in_background(image_path):
     email_thread.start()
 
 def main():
-    model = YOLO("Model/ppe.pt")  # Replace with your custom model file if needed
-    cap = cv2.VideoCapture(0)  # 0 is usually the default camera
+    config = load_config()
+
+    model = YOLO(config["model"]["path"])
+    cap = cv2.VideoCapture(config["camera"]["source"])
     
     if not cap.isOpened():
         print("Error: Unable to access the webcam.")
@@ -93,7 +101,7 @@ def main():
     email_sent_time = 0  # To track when to stop showing the email sent message
 
     # Create a resizable window
-    cv2.namedWindow("YOLOv8 Annotated Feed", cv2.WINDOW_NORMAL)
+    cv2.namedWindow(config["display"]["window_name"], cv2.WINDOW_NORMAL)
 
     while True:
         ret, frame = cap.read()
@@ -135,8 +143,10 @@ def main():
                         person_detected = True
 
         # If person is detected but no hardhat detected for 10 seconds, send an email alert
-        if person_detected and not hardhat_detected and (time.time() - last_email_time) >= 100:  # Check 10 seconds interval
-            image_path = "no_hardhat_frame.jpg"
+        if person_detected and not hardhat_detected and (
+            time.time() - last_email_time
+        ) >= config["alerts"]["email_cooldown_sec"]:
+            image_path = config["alerts"]["snapshot_path"]
             cv2.imwrite(image_path, frame)  # Save the frame as an image
             send_email_in_background(image_path)  # Send email in background thread
             email_sent_flag = True
@@ -160,14 +170,20 @@ def main():
             y_position += 30
 
         # Show the "Email Sent" message for 3 seconds after an email is sent
-        if email_sent_flag and (time.time() - email_sent_time) < 3:
+        if email_sent_flag and (
+            time.time() - email_sent_time
+        ) < config["alerts"]["email_popup_duration_sec"]:
             draw_text_with_background(frame, "Email Sent", (frame.shape[1] - 100, 30), font_scale=0.5, color=(0, 255, 0), bg_color=(0, 0, 0), alpha=0.8, padding=5)
 
         # Resize the frame to fit the window dynamically
-        resized_frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)  # Resize to a fixed size
+        resized_frame = cv2.resize(
+            frame,
+            (config["display"]["width"], config["display"]["height"]),
+            interpolation=cv2.INTER_LINEAR,
+        )
 
         # Display the annotated frame
-        cv2.imshow("YOLOv8 Annotated Feed", resized_frame)
+        cv2.imshow(config["display"]["window_name"], resized_frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break

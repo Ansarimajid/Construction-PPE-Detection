@@ -1,0 +1,16 @@
+model:
+  path: "Model/ppe.pt"
+
+camera:
+  source: 0
+
+alerts:
+  email_cooldown_sec: 100
+  email_popup_duration_sec: 3
+  snapshot_path: "no_hardhat_frame.jpg"
+
+display:
+  window_name: "YOLOv8 Annotated Feed"
+  width: 640
+  height: 480
+
