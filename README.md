@@ -118,6 +118,7 @@ Bounding Box + Class Labels
 Construction-PPE-Detection/
 ├── webcam.py            # Main detection script
 ├── ppe.pt               # YOLOv8 weights (add manually)
+├── config.yaml          # Runtime configuration (camera/model/alerts/display)
 ├── yolo_env.yml         # Conda environment
 ├── requirements.txt     # pip dependencies
 ├── .env                 # Email credentials (not committed)
@@ -134,6 +135,13 @@ You can tweak the following in `webcam.py`:
 - **Detection confidence threshold** — raise/lower sensitivity
 - **Input source** — switch between webcam index or video file path
 - **Email content** — customize the alert message body
+
+You can now also tweak runtime behavior in `config.yaml`:
+
+- **Model path** (`model.path`)
+- **Camera source** (`camera.source`)
+- **Email cooldown + snapshot path** (`alerts.*`)
+- **Display window + resolution** (`display.*`)
 
 ---
 
