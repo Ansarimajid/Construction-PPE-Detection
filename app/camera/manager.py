@@ -14,7 +14,7 @@ from app.core.detector import Detection, PPEDetector
 from app.core.frame_annotator import annotate_frame
 from app.core.logging import get_logger
 from app.core.pose import Pose, PoseEstimator
-from app.core.ppe_assigner import PersonStatus, analyze_persons
+from app.core.ppe_assigner import PersonStatus, PPEStatusSmoother, analyze_persons
 from app.core.tracker import IoUTracker
 from app.core.violation_checker import ViolationChecker
 
@@ -30,6 +30,7 @@ class _CameraEntry:
     latest_counts: dict = field(default_factory=dict)
     alert_sent_until: float = 0.0  # show overlay until this timestamp
     tracker: IoUTracker | None = None
+    smoother: PPEStatusSmoother | None = None
 
 
 class CameraManager:
@@ -101,6 +102,7 @@ class CameraManager:
                 max_age=settings.TRACK_MAX_AGE,
                 min_hits=settings.TRACK_MIN_HITS,
             )
+            entry.smoother = PPEStatusSmoother(window=settings.PPE_SMOOTHING_WINDOW)
         self._entries[camera_id] = entry
         entry.task = asyncio.create_task(
             self._process_loop(entry), name=f"camera-{camera_id}"
@@ -163,7 +165,7 @@ class CameraManager:
                     tracked = entry.tracker.update(
                         [d for d in detections if d.class_name == "Person"]
                     )
-                    persons = analyze_persons(tracked, detections, poses)
+                    persons = entry.smoother.update(analyze_persons(tracked, detections, poses))
 
                 hardhat_count = sum(1 for d in detections if d.class_name == "Hardhat")
                 vest_count = sum(1 for d in detections if d.class_name == "Safety Vest")

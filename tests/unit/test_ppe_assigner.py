@@ -13,7 +13,13 @@ from app.core.pose import (
     RIGHT_SHOULDER,
     Pose,
 )
-from app.core.ppe_assigner import analyze_persons, head_region, match_poses
+from app.core.ppe_assigner import (
+    PersonStatus,
+    PPEStatusSmoother,
+    analyze_persons,
+    head_region,
+    match_poses,
+)
 
 
 def make_detection(
@@ -87,3 +93,48 @@ def test_match_poses_ignores_non_overlapping():
     worker = make_detection("Person", 0, 0, 100, 300, track_id=1)
     far_pose = make_pose(500, 0, 600, 300, {})
     assert match_poses([worker], [far_pose]) == [None]
+
+
+def make_status(track_id: int | None, has_hardhat: bool, has_vest: bool = True) -> PersonStatus:
+    person = make_detection("Person", 0, 0, 100, 300, track_id=track_id)
+    return PersonStatus(person=person, pose=None, has_hardhat=has_hardhat, has_vest=has_vest)
+
+
+def test_smoother_ignores_single_missed_frame():
+    smoother = PPEStatusSmoother(window=5)
+    for _ in range(4):
+        smoother.update([make_status(1, True)])
+    [status] = smoother.update([make_status(1, False)])
+    assert status.has_hardhat is True
+
+
+def test_smoother_follows_sustained_change():
+    smoother = PPEStatusSmoother(window=5)
+    for _ in range(5):
+        smoother.update([make_status(1, True)])
+    for _ in range(3):
+        [status] = smoother.update([make_status(1, False)])
+    assert status.has_hardhat is False
+
+
+def test_smoother_keeps_workers_separate():
+    smoother = PPEStatusSmoother(window=5)
+    for _ in range(4):
+        smoother.update([make_status(1, True), make_status(2, False)])
+    a, b = smoother.update([make_status(1, False), make_status(2, True)])
+    assert (a.has_hardhat, b.has_hardhat) == (True, False)
+
+
+def test_smoother_passes_through_untracked_and_disabled():
+    assert PPEStatusSmoother(window=5).update([make_status(None, False)])[0].has_hardhat is False
+    disabled = PPEStatusSmoother(window=1)
+    disabled.update([make_status(1, True)])
+    assert disabled.update([make_status(1, False)])[0].has_hardhat is False
+
+
+def test_smoother_forgets_idle_workers():
+    smoother = PPEStatusSmoother(window=5, max_idle_frames=2)
+    smoother.update([make_status(1, True)])
+    for _ in range(3):
+        smoother.update([])
+    assert smoother._history == {}
