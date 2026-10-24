@@ -26,6 +26,7 @@ def _to_response(v: Violation) -> ViolationResponse:
         confidence=v.confidence,
         timestamp=v.timestamp,
         frame_path=v.frame_path,
+        track_id=v.track_id,
         frame_url=frame_url,
     )
 
@@ -76,9 +77,13 @@ async def export_violations(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "camera_id", "violation_type", "confidence", "timestamp", "frame_path"])
+    writer.writerow(
+        ["id", "camera_id", "track_id", "violation_type", "confidence", "timestamp", "frame_path"]
+    )
     for v in violations:
-        writer.writerow([v.id, v.camera_id, v.violation_type, v.confidence, v.timestamp, v.frame_path])
+        writer.writerow(
+            [v.id, v.camera_id, v.track_id, v.violation_type, v.confidence, v.timestamp, v.frame_path]
+        )
 
     output.seek(0)
     return StreamingResponse(

@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     MODEL_PATH: str = "Model/ppe.pt"
     DETECTION_CONFIDENCE: float = 0.5
 
+    # Person tracking (per-worker IDs and per-worker violations)
+    ENABLE_TRACKING: bool = True
+    TRACK_IOU_THRESHOLD: float = 0.3
+    TRACK_MAX_AGE: int = 30  # frames a lost track is kept alive
+    TRACK_MIN_HITS: int = 3  # frames before a track gets an ID
+
+    # Pose estimation (keypoints used to locate head/torso for PPE assignment)
+    ENABLE_POSE: bool = True
+    POSE_MODEL_PATH: str = "yolo11n-pose.pt"
+    POSE_CONFIDENCE: float = 0.5
+
     # Violation frames storage
     FRAMES_DIR: str = "violation_frames"
 

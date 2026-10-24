@@ -26,6 +26,16 @@ Construction sites are among the most hazardous work environments. Manual superv
 
 ---
 
+## Demo: Tracking + Pose Estimation
+
+![Worker tracking and pose estimation demo](Visuals/demo-tracking-pose.gif)
+
+Each worker gets a stable ID and a pose skeleton. Boxes are coloured by PPE status: **green** = compliant, **orange** = no vest, **red** = no hardhat. Hardhats and vests are assigned to the worker whose head/torso keypoints they cover, and violations are raised per worker.
+
+> Clip: 10 s excerpt (frames 300–600) of a 1920×1080 street-works video, processed with `Model/ppe.pt` + `yolo11n-pose.pt`.
+
+---
+
 ## Features
 
 ### Detection
@@ -35,6 +45,8 @@ Construction sites are among the most hazardous work environments. Manual superv
 | 🦺 **Vest Detection** | Detects high-visibility safety vests |
 | 😷 **Mask Detection** | Monitors mask compliance on site |
 | 🧍 **Person Detection** | Tracks worker presence in the frame |
+| 🆔 **Worker Tracking** | Stable per-worker IDs across frames; violations and alerts are raised per worker |
+| 🦴 **Pose Estimation** | YOLO pose keypoints locate each worker's head and torso so hardhats and vests are assigned to the right person |
 | 📊 **Live Counts Overlay** | Real-time detection counts on the video feed |
 
 ### Infrastructure
@@ -127,6 +139,17 @@ DETECTION_CONFIDENCE=0.5
 # Alert timing (seconds)
 ALERT_COOLDOWN_SECONDS=10
 
+# Person tracking
+ENABLE_TRACKING=true
+TRACK_IOU_THRESHOLD=0.3
+TRACK_MAX_AGE=30          # frames a lost worker keeps their ID
+TRACK_MIN_HITS=3          # frames before a worker gets an ID
+
+# Pose estimation (weights auto-download on first run)
+ENABLE_POSE=true
+POSE_MODEL_PATH=yolo11n-pose.pt
+POSE_CONFIDENCE=0.5
+
 # Email (Gmail — requires App Password)
 SENDER_EMAIL=your_email@gmail.com
 RECEIVER_EMAIL=receiver@example.com
@@ -137,6 +160,8 @@ WEBHOOK_URL=https://hooks.example.com/alerts
 ```
 
 > **Gmail users:** Generate an [App Password](https://support.google.com/accounts/answer/185833) — your regular password won't work with SMTP.
+
+> **Tracking & pose:** with tracking on, each worker gets their own `VIOLATION_PERSIST_SECONDS` timer and `ALERT_COOLDOWN_SECONDS` cooldown, and the worker ID is stored on the violation (`track_id`). Pose is optional — if the pose model can't be loaded the app logs a warning and assigns PPE using the person box alone. Set `ENABLE_TRACKING=false` to restore the original per-camera behaviour.
 
 > **Never commit `.env`** — it's already in `.gitignore`.
 
@@ -229,7 +254,10 @@ Construction-PPE-Detection/
 │   ├── core/
 │   │   ├── config.py            # Pydantic settings (all env vars)
 │   │   ├── detector.py          # YOLOv8 wrapper
-│   │   ├── violation_checker.py # Business rules, per-camera state
+│   │   ├── tracker.py           # IoU multi-object tracker (worker IDs)
+│   │   ├── pose.py              # YOLO pose keypoint estimator
+│   │   ├── ppe_assigner.py      # Assigns hardhats/vests to tracked workers
+│   │   ├── violation_checker.py # Business rules, per-camera / per-worker state
 │   │   └── frame_annotator.py   # Bounding box / overlay drawing
 │   ├── camera/                  # Webcam, RTSP, file sources + manager
 │   ├── alerts/                  # Email, webhook, database handlers
@@ -238,7 +266,7 @@ Construction-PPE-Detection/
 │   ├── schemas/                 # Pydantic request/response models
 │   └── static/                  # Web dashboard (HTML/JS/CSS)
 ├── tests/
-│   ├── unit/                    # Violation checker, dispatcher, config
+│   ├── unit/                    # Tracker, PPE assigner, violation checker, dispatcher, config
 │   └── integration/             # API endpoint tests
 ├── docker/
 │   ├── Dockerfile               # Production image (python:3.11-slim)

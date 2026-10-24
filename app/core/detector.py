@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -33,6 +34,7 @@ class Detection:
     x2: int
     y2: int
     color: tuple[int, int, int]
+    track_id: Optional[int] = None  # set by IoUTracker for tracked objects
 
 
 class PPEDetector:

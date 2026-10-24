@@ -94,7 +94,7 @@ function stopStream() {
   img.src = '';
   img.classList.add('d-none');
   document.getElementById('stream-placeholder').classList.remove('d-none');
-  ['cnt-hardhat', 'cnt-vest', 'cnt-person'].forEach(id => {
+  ['cnt-hardhat', 'cnt-vest', 'cnt-person', 'cnt-tracked', 'cnt-noncompliant'].forEach(id => {
     document.getElementById(id).textContent = '—';
   });
 }
@@ -110,6 +110,8 @@ function openWebSocket(cameraId) {
       document.getElementById('cnt-hardhat').textContent = d.hardhat_count ?? '—';
       document.getElementById('cnt-vest').textContent = d.vest_count ?? '—';
       document.getElementById('cnt-person').textContent = d.person_count ?? '—';
+      document.getElementById('cnt-tracked').textContent = d.unique_person_count ?? '—';
+      document.getElementById('cnt-noncompliant').textContent = d.non_compliant_count ?? '—';
     } catch {}
   };
   ws.onerror = () => {};
@@ -144,7 +146,7 @@ async function loadViolations() {
   const tbody = document.getElementById('violations-tbody');
 
   if (data.items.length === 0) {
-    tbody.innerHTML = '<tr id="no-violations-row"><td colspan="5" class="text-center text-muted py-4">No violations recorded</td></tr>';
+    tbody.innerHTML = '<tr id="no-violations-row"><td colspan="6" class="text-center text-muted py-4">No violations recorded</td></tr>';
     return;
   }
 
@@ -154,9 +156,11 @@ async function loadViolations() {
       ? `<button class="btn btn-xs btn-outline-secondary py-0 px-1" onclick="showFrame('${v.frame_url}')">Frame</button>`
       : '';
     const conf = (v.confidence * 100).toFixed(0) + '%';
+    const worker = v.track_id != null ? `#${v.track_id}` : '—';
     return `<tr>
       <td class="text-nowrap small">${ts}</td>
       <td>${v.camera_id}</td>
+      <td>${worker}</td>
       <td><span class="badge badge-violation">${v.violation_type}</span></td>
       <td>${conf}</td>
       <td>${frameBtn}</td>
