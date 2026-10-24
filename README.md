@@ -1,6 +1,10 @@
 <div align="center">
 
-![Construction PPE Detection — worker tracking and pose estimation](Visuals/banner-all-workers.png)
+<a href="Visuals/ppe-detection-demo.mp4">
+  <img src="Visuals/demo-video.webp" alt="Construction PPE Detection — live demo of worker tracking and pose estimation" width="100%" />
+</a>
+
+<sub>▶ <a href="Visuals/ppe-detection-demo.mp4">Watch the full-quality video</a></sub>
 
 # 🦺 Construction Safety Detection
 ### Real-time PPE monitoring with YOLOv8 — scalable API, web dashboard, and multi-camera support
@@ -144,6 +148,7 @@ ENABLE_TRACKING=true
 TRACK_IOU_THRESHOLD=0.3
 TRACK_MAX_AGE=30          # frames a lost worker keeps their ID
 TRACK_MIN_HITS=3          # frames before a worker gets an ID
+PPE_SMOOTHING_WINDOW=15   # majority vote of each worker's PPE status (1 = off)
 
 # Pose estimation (weights auto-download on first run)
 ENABLE_POSE=true

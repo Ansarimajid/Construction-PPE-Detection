@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+from collections import deque
 from dataclasses import dataclass
 from typing import Optional
 
@@ -120,3 +122,48 @@ def analyze_persons(
         )
         for i, (person, pose) in enumerate(zip(persons, matched_poses))
     ]
+
+
+class PPEStatusSmoother:
+    """
+    Majority vote of each tracked worker's PPE status over their last ``window`` frames.
+    A single missed hardhat detection no longer flips a compliant worker to a violation.
+    One instance per camera, alongside its tracker.
+    """
+
+    def __init__(self, window: int = 15, max_idle_frames: int = 90) -> None:
+        self.window = window
+        self.max_idle_frames = max_idle_frames
+        self._history: dict[int, deque[tuple[bool, bool]]] = {}
+        self._last_seen: dict[int, int] = {}
+        self._frame = 0
+
+    def update(self, persons: list[PersonStatus]) -> list[PersonStatus]:
+        self._frame += 1
+        smoothed: list[PersonStatus] = []
+
+        for status in persons:
+            if status.track_id is None or self.window <= 1:
+                smoothed.append(status)
+                continue
+            history = self._history.setdefault(status.track_id, deque(maxlen=self.window))
+            history.append((status.has_hardhat, status.has_vest))
+            self._last_seen[status.track_id] = self._frame
+            n = len(history)
+            smoothed.append(
+                dataclasses.replace(
+                    status,
+                    has_hardhat=2 * sum(h for h, _ in history) >= n,
+                    has_vest=2 * sum(v for _, v in history) >= n,
+                )
+            )
+
+        for track_id in [t for t, f in self._last_seen.items() if self._frame - f > self.max_idle_frames]:
+            del self._history[track_id]
+            del self._last_seen[track_id]
+        return smoothed
+
+    def reset(self) -> None:
+        self._history.clear()
+        self._last_seen.clear()
+        self._frame = 0

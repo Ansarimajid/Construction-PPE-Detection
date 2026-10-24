@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     TRACK_IOU_THRESHOLD: float = 0.3
     TRACK_MAX_AGE: int = 30  # frames a lost track is kept alive
     TRACK_MIN_HITS: int = 3  # frames before a track gets an ID
+    PPE_SMOOTHING_WINDOW: int = 15  # frames of majority vote per worker (1 = off)
 
     # Pose estimation (keypoints used to locate head/torso for PPE assignment)
     ENABLE_POSE: bool = True
