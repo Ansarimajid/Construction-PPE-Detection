@@ -13,6 +13,7 @@ class ViolationResponse(BaseModel):
     confidence: float
     timestamp: datetime
     frame_path: Optional[str]
+    track_id: Optional[int] = None
     frame_url: Optional[str] = None
 
     model_config = {"from_attributes": True}

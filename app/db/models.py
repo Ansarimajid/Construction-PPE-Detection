@@ -33,6 +33,7 @@ class Violation(Base):
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
     frame_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    track_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # tracked worker ID
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     camera: Mapped["Camera"] = relationship("Camera", back_populates="violations")

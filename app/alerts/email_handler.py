@@ -29,9 +29,13 @@ class EmailHandler(AlertHandler):
         message["To"] = settings.RECEIVER_EMAIL
         message["Subject"] = f"Alert: {violation.violation_type} on Camera {violation.camera_id}"
 
+        worker_line = (
+            f"Worker ID: #{violation.track_id}\n" if violation.track_id is not None else ""
+        )
         body = (
             f"A safety violation was detected on Camera {violation.camera_id}.\n"
             f"Violation type: {violation.violation_type}\n"
+            f"{worker_line}"
             f"Confidence: {violation.confidence:.0%}\n"
             "Please review the attached frame."
         )

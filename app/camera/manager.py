@@ -10,9 +10,12 @@ import numpy as np
 
 from app.camera.source import CameraSource
 from app.core.config import settings
-from app.core.detector import PPEDetector
+from app.core.detector import Detection, PPEDetector
 from app.core.frame_annotator import annotate_frame
 from app.core.logging import get_logger
+from app.core.pose import Pose, PoseEstimator
+from app.core.ppe_assigner import PersonStatus, analyze_persons
+from app.core.tracker import IoUTracker
 from app.core.violation_checker import ViolationChecker
 
 logger = get_logger(__name__)
@@ -26,11 +29,13 @@ class _CameraEntry:
     latest_frame: bytes | None = None  # JPEG bytes for MJPEG stream
     latest_counts: dict = field(default_factory=dict)
     alert_sent_until: float = 0.0  # show overlay until this timestamp
+    tracker: IoUTracker | None = None
 
 
 class CameraManager:
-    def __init__(self, detector: PPEDetector) -> None:
+    def __init__(self, detector: PPEDetector, pose_estimator: PoseEstimator | None = None) -> None:
         self.detector = detector
+        self.pose_estimator = pose_estimator
         self._entries: dict[int, _CameraEntry] = {}
         self._checker = ViolationChecker(
             cooldown_seconds=settings.ALERT_COOLDOWN_SECONDS,
@@ -90,6 +95,12 @@ class CameraManager:
             return False
 
         entry = _CameraEntry(camera_id=camera_id, source=source)
+        if settings.ENABLE_TRACKING:
+            entry.tracker = IoUTracker(
+                iou_threshold=settings.TRACK_IOU_THRESHOLD,
+                max_age=settings.TRACK_MAX_AGE,
+                min_hits=settings.TRACK_MIN_HITS,
+            )
         self._entries[camera_id] = entry
         entry.task = asyncio.create_task(
             self._process_loop(entry), name=f"camera-{camera_id}"
@@ -116,6 +127,11 @@ class CameraManager:
         logger.info("Camera %d stopped", camera_id)
         return True
 
+    def _infer(self, frame: np.ndarray) -> tuple[list[Detection], list[Pose]]:
+        detections = self.detector.detect(frame)
+        poses = self.pose_estimator.estimate(frame) if self.pose_estimator else []
+        return detections, poses
+
     async def _process_loop(self, entry: _CameraEntry) -> None:
         from app.alerts.dispatcher import AlertDispatcher
         from app.alerts.email_handler import EmailHandler
@@ -140,7 +156,14 @@ class CameraManager:
                     continue
 
                 # Run YOLO in thread pool so we don't block the event loop
-                detections = await loop.run_in_executor(None, self.detector.detect, frame)
+                detections, poses = await loop.run_in_executor(None, self._infer, frame)
+
+                persons: list[PersonStatus] | None = None
+                if entry.tracker is not None:
+                    tracked = entry.tracker.update(
+                        [d for d in detections if d.class_name == "Person"]
+                    )
+                    persons = analyze_persons(tracked, detections, poses)
 
                 hardhat_count = sum(1 for d in detections if d.class_name == "Hardhat")
                 vest_count = sum(1 for d in detections if d.class_name == "Safety Vest")
@@ -152,27 +175,44 @@ class CameraManager:
                     "person_count": person_count,
                     "total_detections": len(detections),
                 }
+                if persons is not None:
+                    entry.latest_counts.update({
+                        "unique_person_count": entry.tracker.total_tracks,
+                        "non_compliant_count": sum(1 for p in persons if not p.has_hardhat),
+                        "persons": [
+                            {
+                                "track_id": p.track_id,
+                                "has_hardhat": p.has_hardhat,
+                                "has_vest": p.has_vest,
+                                "has_pose": p.pose is not None,
+                            }
+                            for p in persons
+                        ],
+                    })
 
-                # Save violation frame if needed
-                frame_path: str | None = None
+                # Check for violations (quick pre-check before saving frame)
+                if persons is not None:
+                    violations = self._checker.check_tracks(camera_id, persons)
+                else:
+                    violation = self._checker.check(camera_id, detections)
+                    violations = [violation] if violation is not None else []
 
-                # Check for violation (quick pre-check before saving frame)
-                violation = self._checker.check(camera_id, detections)
-
-                if violation is not None:
+                if violations:
                     frame_dir = os.path.join(settings.FRAMES_DIR, f"camera_{camera_id}")
                     os.makedirs(frame_dir, exist_ok=True)
-                    fname = f"violation_{int(time.time())}.jpg"
+                    fname = f"violation_{int(time.time() * 1000)}.jpg"
                     frame_path = os.path.join(frame_dir, fname)
                     await loop.run_in_executor(None, cv2.imwrite, frame_path, frame)
-                    violation.frame_path = frame_path
                     entry.alert_sent_until = time.time() + 3.0
-                    await dispatcher.dispatch(violation)
+                    for violation in violations:
+                        violation.frame_path = frame_path
+                        await dispatcher.dispatch(violation)
 
                 # Annotate frame for MJPEG stream
                 show_alert = time.time() < entry.alert_sent_until
                 annotated = annotate_frame(
-                    frame, detections, hardhat_count, vest_count, person_count, show_alert
+                    frame, detections, hardhat_count, vest_count, person_count, show_alert,
+                    persons=persons,
                 )
                 resized = cv2.resize(annotated, (640, 480))
                 _, jpeg = cv2.imencode(".jpg", resized, [cv2.IMWRITE_JPEG_QUALITY, 70])

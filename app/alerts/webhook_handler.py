@@ -25,6 +25,7 @@ class WebhookHandler(AlertHandler):
             "confidence": round(violation.confidence, 4),
             "timestamp": datetime.utcnow().isoformat(),
             "frame_path": violation.frame_path,
+            "track_id": violation.track_id,
         }
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:

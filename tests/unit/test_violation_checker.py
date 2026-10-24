@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 
 from app.core.detector import Detection
+from app.core.ppe_assigner import PersonStatus
 from app.core.violation_checker import ViolationChecker
 
 
@@ -17,6 +18,12 @@ def make_detection(class_name: str, confidence: float = 0.9) -> Detection:
         x1=0, y1=0, x2=100, y2=100,
         color=(255, 0, 0),
     )
+
+
+def make_status(track_id: int | None, has_hardhat: bool) -> PersonStatus:
+    person = make_detection("Person")
+    person.track_id = track_id
+    return PersonStatus(person=person, pose=None, has_hardhat=has_hardhat, has_vest=True)
 
 
 @pytest.fixture
@@ -114,3 +121,73 @@ def test_reset_clears_state(checker):
     assert camera_id in checker._states
     checker.reset(camera_id)
     assert camera_id not in checker._states
+
+
+def test_track_violation_after_persist_threshold(checker):
+    with patch("time.time", return_value=1000.0):
+        assert checker.check_tracks(1, [make_status(7, has_hardhat=False)]) == []
+
+    with patch("time.time", return_value=1006.0):
+        events = checker.check_tracks(1, [make_status(7, has_hardhat=False)])
+
+    assert len(events) == 1
+    assert events[0].track_id == 7
+    assert events[0].violation_type == "NO-Hardhat"
+
+
+def test_track_violation_only_for_offending_worker(checker):
+    with patch("time.time", return_value=1000.0):
+        checker.check_tracks(1, [make_status(1, True), make_status(2, False)])
+
+    with patch("time.time", return_value=1006.0):
+        events = checker.check_tracks(1, [make_status(1, True), make_status(2, False)])
+
+    assert [e.track_id for e in events] == [2]
+
+
+def test_track_cooldown_is_per_worker(checker):
+    with patch("time.time", return_value=1000.0):
+        checker.check_tracks(1, [make_status(1, False)])
+    with patch("time.time", return_value=1006.0):
+        first = checker.check_tracks(1, [make_status(1, False)])
+    with patch("time.time", return_value=1007.0):
+        checker.check_tracks(1, [make_status(1, False), make_status(2, False)])
+    with patch("time.time", return_value=1013.0):
+        second = checker.check_tracks(1, [make_status(1, False), make_status(2, False)])
+
+    assert [e.track_id for e in first] == [1]
+    # Worker 1 still in cooldown, worker 2 has now persisted long enough
+    assert [e.track_id for e in second] == [2]
+
+
+def test_putting_on_hardhat_resets_track_timer(checker):
+    with patch("time.time", return_value=1000.0):
+        checker.check_tracks(1, [make_status(1, False)])
+    with patch("time.time", return_value=1004.0):
+        checker.check_tracks(1, [make_status(1, True)])
+    with patch("time.time", return_value=1008.0):
+        events = checker.check_tracks(1, [make_status(1, False)])
+
+    assert events == []
+
+
+def test_untracked_people_ignored(checker):
+    with patch("time.time", return_value=1000.0):
+        assert checker.check_tracks(1, [make_status(None, False)]) == []
+    assert checker._track_states == {}
+
+
+def test_stale_track_state_pruned(checker):
+    with patch("time.time", return_value=1000.0):
+        checker.check_tracks(1, [make_status(1, False)])
+    with patch("time.time", return_value=1000.0 + checker.TRACK_STATE_TTL_SECONDS + 1):
+        checker.check_tracks(1, [])
+    assert checker._track_states == {}
+
+
+def test_reset_clears_track_state(checker):
+    with patch("time.time", return_value=1000.0):
+        checker.check_tracks(1, [make_status(1, False)])
+        checker.check_tracks(2, [make_status(1, False)])
+    checker.reset(1)
+    assert list(checker._track_states) == [(2, 1)]

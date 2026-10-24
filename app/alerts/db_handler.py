@@ -21,6 +21,7 @@ class DatabaseHandler(AlertHandler):
                     violation_type=violation.violation_type,
                     confidence=violation.confidence,
                     frame_path=violation.frame_path,
+                    track_id=violation.track_id,
                 )
                 session.add(db_violation)
                 await session.flush()  # get db_violation.id

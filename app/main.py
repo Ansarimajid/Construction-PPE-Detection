@@ -31,9 +31,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.detector = PPEDetector(settings.MODEL_PATH, settings.DETECTION_CONFIDENCE)
     logger.info("YOLO model loaded from %s", settings.MODEL_PATH)
 
+    # Optional pose model; fall back to box-only PPE assignment if it can't be loaded
+    app.state.pose_estimator = None
+    if settings.ENABLE_POSE:
+        from app.core.pose import PoseEstimator
+        try:
+            app.state.pose_estimator = PoseEstimator(
+                settings.POSE_MODEL_PATH, settings.POSE_CONFIDENCE
+            )
+        except Exception as exc:
+            logger.warning("Pose model %s unavailable, continuing without pose: %s",
+                           settings.POSE_MODEL_PATH, exc)
+
     # Start camera manager
     from app.camera.manager import CameraManager
-    app.state.camera_manager = CameraManager(app.state.detector)
+    app.state.camera_manager = CameraManager(app.state.detector, app.state.pose_estimator)
     await app.state.camera_manager.start()
     logger.info("Camera manager started")
 
