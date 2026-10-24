@@ -1,6 +1,6 @@
 <div align="center">
 
-![Header Image](Visuals/ppe-public-view.png)
+![Construction PPE Detection — worker tracking and pose estimation](Visuals/banner.png)
 
 # 🦺 Construction Safety Detection
 ### Real-time PPE monitoring with YOLOv8 — scalable API, web dashboard, and multi-camera support
